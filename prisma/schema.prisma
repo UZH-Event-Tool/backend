@@ -9,7 +9,6 @@ datasource db {
 
 model User {
   id                String   @id @default(cuid())
-  email             String   @unique
   passwordHash      String
   fullName          String
   firstName         String?
@@ -20,9 +19,28 @@ model User {
   age               Int?
   location          String?
   fieldOfStudies    String?
-  universityEmail   String?
+  universityEmail   String   @unique
   interests         String?
   profileImageUrl   String?
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
+  events            Event[]
+}
+
+model Event {
+  id          String   @id @default(cuid())
+  name        String
+  description String
+  location    String
+  startsAt    DateTime
+  theme       String
+  images      String
+  category    String
+  attendanceLimit    Int      @default(0)
+  registrationDeadline DateTime @default(now())
+  ownerName   String
+  ownerId     String
+  owner       User     @relation(fields: [ownerId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }

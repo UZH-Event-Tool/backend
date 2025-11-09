@@ -3,7 +3,7 @@ import { ENV } from "../env";
 
 export type JwtPayload = {
   sub: string;
-  email: string;
+  universityEmail: string;
   fullName: string;
 };
 

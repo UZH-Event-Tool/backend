@@ -4,6 +4,7 @@ import path from "node:path";
 import { ENV } from "./env";
 import { authRouter } from "./routes/auth";
 import { profileRouter } from "./routes/profile";
+import { eventsRouter } from "./routes/events";
 
 export function createApp() {
   const app = express();
@@ -26,6 +27,7 @@ export function createApp() {
 
   app.use("/auth", authRouter);
   app.use("/profile", profileRouter);
+  app.use("/events", eventsRouter);
 
   app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
     console.error("Unhandled error", err);

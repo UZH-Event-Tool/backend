@@ -50,7 +50,6 @@ const upload = multer({
 const profileSchema = z.object({
   firstName: z.string().min(1, "First name is required").max(120),
   lastName: z.string().min(1, "Last name is required").max(120),
-  email: z.string().email(),
   dateOfBirth: z
     .string()
     .optional()
@@ -121,7 +120,6 @@ async function handleProfileUpdate(req: AuthenticatedRequest, res: Response) {
 
   const data = parsed.data;
 
-  const normalizedEmail = data.email.toLowerCase();
   const normalizedUniversityEmail = data.universityEmail.toLowerCase();
 
   if (!isAllowedDomain(normalizedUniversityEmail)) {
@@ -131,15 +129,6 @@ async function handleProfileUpdate(req: AuthenticatedRequest, res: Response) {
     return res.status(400).json({
       message: `University email must end with ${ENV.ALLOWED_EMAIL_DOMAIN}`,
     });
-  }
-
-  if (!isAllowedDomain(normalizedEmail)) {
-    if (req.file) {
-      fs.unlink(req.file.path, () => undefined);
-    }
-    return res
-      .status(400)
-      .json({ message: `Email must be a ${ENV.ALLOWED_EMAIL_DOMAIN} address` });
   }
 
   const userId = req.user!.sub;
@@ -152,15 +141,15 @@ async function handleProfileUpdate(req: AuthenticatedRequest, res: Response) {
     return res.status(404).json({ message: "User not found" });
   }
 
-  if (normalizedEmail !== existingUser.email) {
+  if (normalizedUniversityEmail !== existingUser.universityEmail) {
     const emailTaken = await prisma.user.findUnique({
-      where: { email: normalizedEmail },
+      where: { universityEmail: normalizedUniversityEmail },
     });
     if (emailTaken && emailTaken.id !== userId) {
       if (req.file) {
         fs.unlink(req.file.path, () => undefined);
       }
-      return res.status(409).json({ message: "Email already in use" });
+      return res.status(409).json({ message: "University email already in use" });
     }
   }
 
@@ -184,7 +173,6 @@ async function handleProfileUpdate(req: AuthenticatedRequest, res: Response) {
   const updated = await prisma.user.update({
     where: { id: userId },
     data: {
-      email: normalizedEmail,
       fullName: `${data.firstName} ${data.lastName}`.trim(),
       firstName: data.firstName,
       lastName: data.lastName,
