@@ -6,7 +6,7 @@ Lightweight Express + SQLite backend powering authentication for the MVP. The st
 
 ```bash
 # from repo root
-cd server
+cd backend
 npm install
 npm run prisma:generate
 npm run db:init   # creates the SQLite schema
@@ -29,6 +29,7 @@ Key variables:
 ## API Overview
 
 ### `POST /auth/register`
+
 Creates a new student account. Body schema:
 
 ```json
@@ -45,11 +46,13 @@ Creates a new student account. Body schema:
 ```
 
 Rules:
+
 - `email` (and `universityEmail` if provided) must end with `@uzh.ch` (configurable).
 - Passwords require ≥ 8 characters and are stored with bcrypt.
 - `interests` are stored as a comma-separated list for now.
 
 Response:
+
 ```json
 {
   "user": { "id": "...", "email": "...", "fullName": "...", ... },
@@ -58,20 +61,27 @@ Response:
 ```
 
 ### `POST /auth/login`
+
 Body:
+
 ```json
 { "email": "jane.doe@uzh.ch", "password": "super-secret" }
 ```
+
 Returns the same shape as registration. Non-matching credentials return `401`.
 
 ### `GET /health`
+
 Simple readiness probe (`{"status":"ok"}`).
 
 ### `GET /profile`
+
 Returns the authenticated user's profile. Requires a `Bearer` JWT in the `Authorization` header. Response includes profile metadata plus a resolved `profileImageUrl` if a picture has been uploaded.
 
 ### `PUT /profile`
+
 Multipart endpoint (accepts `multipart/form-data`) that updates a user's profile. Fields: first/last name, primary email, university email, age, date of birth, gender, about, location, field of studies, interests (`comma`-separated or repeated inputs), and an optional `profileImage` upload (PNG or JPEG, ≤5 MB). The handler enforces:
+
 - University email must match `ALLOWED_EMAIL_DOMAIN`
 - Age must be ≥ 16
 - Profile pictures must be PNG or JPEG
