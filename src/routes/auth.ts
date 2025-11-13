@@ -1,4 +1,5 @@
 import { Router } from "express";
+import type { Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import bcrypt from "bcrypt";
 import { prisma } from "../lib/prisma";
@@ -6,6 +7,9 @@ import { ENV } from "../env";
 import { signToken } from "../utils/jwt";
 import { requireAuth } from "../utils/requireAuth";
 import { toPublicUser } from "../utils/user";
+import multer from "multer";
+import path from "node:path";
+import fs from "node:fs";
 
 const router = Router();
 
@@ -32,10 +36,61 @@ function isAllowedDomain(email: string) {
   return domain === ENV.ALLOWED_EMAIL_DOMAIN.toLowerCase();
 }
 
-router.post("/register", async (req, res) => {
+const PROFILE_UPLOAD_ROOT = path.join(process.cwd(), "uploads", "profile-images");
+
+function ensureProfileUploadDir() {
+  fs.mkdirSync(PROFILE_UPLOAD_ROOT, { recursive: true });
+}
+
+const profileStorage = multer.diskStorage({
+  destination: (_req, _file, cb) => {
+    ensureProfileUploadDir();
+    cb(null, PROFILE_UPLOAD_ROOT);
+  },
+  filename: (_req, file, cb) => {
+    const ext = path.extname(file.originalname) || ".png";
+    cb(null, `profile-${Date.now()}${ext}`);
+  },
+});
+
+const profileUpload = multer({
+  storage: profileStorage,
+  limits: {
+    fileSize: 5 * 1024 * 1024,
+  },
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype === "image/png" || file.mimetype === "image/jpeg") {
+      cb(null, true);
+    } else {
+      cb(new Error("Only PNG and JPEG images are allowed."));
+    }
+  },
+});
+
+router.post("/register", (req, res, next: NextFunction) => {
+  profileUpload.single("profileImage")(req, res, (err) => {
+    if (err) {
+      if (req.file) {
+        fs.unlink(req.file.path, () => undefined);
+      }
+      return res.status(400).json({ message: err.message });
+    }
+    handleRegister(req, res).catch((error) => {
+      if (req.file) {
+        fs.unlink(req.file.path, () => undefined);
+      }
+      next(error);
+    });
+  });
+});
+
+async function handleRegister(req: Request, res: Response) {
   const parsed = registerSchema.safeParse(req.body);
 
   if (!parsed.success) {
+    if (req.file) {
+      fs.unlink(req.file.path, () => undefined);
+    }
     return res
       .status(400)
       .json({ message: "Invalid input", issues: parsed.error.flatten() });
@@ -45,6 +100,9 @@ router.post("/register", async (req, res) => {
   const universityEmail = data.universityEmail.toLowerCase();
 
   if (!isAllowedDomain(universityEmail)) {
+    if (req.file) {
+      fs.unlink(req.file.path, () => undefined);
+    }
     return res.status(400).json({
       message: `University email must end with ${ENV.ALLOWED_EMAIL_DOMAIN}`,
     });
@@ -55,6 +113,9 @@ router.post("/register", async (req, res) => {
   });
 
   if (existing) {
+    if (req.file) {
+      fs.unlink(req.file.path, () => undefined);
+    }
     return res.status(409).json({ message: "An account already exists" });
   }
 
@@ -73,6 +134,7 @@ router.post("/register", async (req, res) => {
       fieldOfStudies: data.fieldOfStudies ?? null,
       universityEmail,
       interests: data.interests?.join(",") ?? null,
+      profileImageUrl: req.file ? `/uploads/profile-images/${req.file.filename}` : null,
     },
   });
 
@@ -83,7 +145,7 @@ router.post("/register", async (req, res) => {
   });
 
   res.status(201).json({ user: toPublicUser(user), token });
-});
+}
 
 router.post("/login", async (req, res) => {
   const parsed = loginSchema.safeParse(req.body);

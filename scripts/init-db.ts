@@ -6,7 +6,6 @@ async function main() {
   await prisma.$executeRawUnsafe(`
     CREATE TABLE IF NOT EXISTS "User" (
       "id" TEXT NOT NULL PRIMARY KEY,
-      "email" TEXT NOT NULL UNIQUE,
       "passwordHash" TEXT NOT NULL,
       "fullName" TEXT NOT NULL,
       "firstName" TEXT,
@@ -17,7 +16,7 @@ async function main() {
       "age" INTEGER,
       "location" TEXT,
       "fieldOfStudies" TEXT,
-      "universityEmail" TEXT,
+      "universityEmail" TEXT NOT NULL UNIQUE,
       "interests" TEXT,
       "profileImageUrl" TEXT,
       "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
