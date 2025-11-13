@@ -33,12 +33,11 @@ model Event {
   description String
   location    String
   startsAt    DateTime
-  theme       String
-  images      String
+  images      String   @default("[]")
   category    String
   attendanceLimit    Int      @default(0)
   registrationDeadline DateTime @default(now())
-  ownerName   String
+  ownerName   String   @default("")
   ownerId     String
   owner       User     @relation(fields: [ownerId], references: [id])
   createdAt   DateTime @default(now())

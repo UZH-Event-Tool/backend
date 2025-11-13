@@ -5,10 +5,7 @@ import path from "node:path";
 import fs from "node:fs";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
-import {
-  requireAuth,
-  type AuthenticatedRequest,
-} from "../utils/requireAuth";
+import { requireAuth, type AuthenticatedRequest } from "../utils/requireAuth";
 import { eventImageStorage, toPublicEvent } from "../utils/event";
 
 const router = Router();
@@ -50,7 +47,7 @@ function deleteStoredImageFiles(imagePaths: string[]) {
 function validateSchedule(
   startsAt: Date,
   registrationDeadline: Date,
-  now: Date,
+  now: Date
 ): string | null {
   if (startsAt.getTime() <= now.getTime()) {
     return "Event time must be in the future";
@@ -89,10 +86,9 @@ const createEventSchema = z.object({
     .transform((value) => new Date(value))
     .refine(
       (value) => !Number.isNaN(value.getTime()),
-      "Event time must be a valid date",
+      "Event time must be a valid date"
     ),
   eventOwner: z.string().min(1, "Event owner is required").max(200),
-  theme: z.string().min(1, "Event theme is required").max(200),
   category: z.string().min(1, "Category is required").max(200),
   attendanceLimit: z.coerce
     .number()
@@ -104,11 +100,11 @@ const createEventSchema = z.object({
     .transform((value) => new Date(value))
     .refine(
       (value) => !Number.isNaN(value.getTime()),
-      "Registration deadline must be a valid date",
+      "Registration deadline must be a valid date"
     ),
 });
 
-const updateEventSchema = createEventSchema.omit({ eventOwner: true });
+const updateEventSchema = createEventSchema;
 
 router.use(requireAuth);
 
@@ -125,13 +121,6 @@ async function handleCreateEvent(req: AuthenticatedRequest, res: Response) {
   const data = parsed.data;
   const uploadedImages = (req.files as Express.Multer.File[]) ?? [];
 
-  if (!uploadedImages.length) {
-    cleanupFiles(uploadedImages);
-    return res
-      .status(400)
-      .json({ message: "At least one event image is required" });
-  }
-
   const startsAt = data.time;
   const registrationDeadline = data.registrationDeadline;
   const now = new Date();
@@ -143,20 +132,21 @@ async function handleCreateEvent(req: AuthenticatedRequest, res: Response) {
   }
 
   const imagePaths = uploadedImages.map(
-    (file) => `/uploads/event-images/${file.filename}`,
+    (file) => `/uploads/event-images/${file.filename}`
   );
 
+  const ownerName =
+    data.eventOwner.trim() || req.user?.fullName?.trim() || "Event Owner";
   const event = await prisma.event.create({
     data: {
       name: data.name,
       description: data.description,
       location: data.location,
       startsAt,
-      theme: data.theme,
       images: eventImageStorage.stringify(imagePaths),
       category: data.category,
-      ownerName: data.eventOwner,
       ownerId: req.user!.sub,
+      ownerName,
       attendanceLimit: data.attendanceLimit,
       registrationDeadline,
     },
@@ -223,11 +213,12 @@ async function handleUpdateEvent(req: AuthenticatedRequest, res: Response) {
       description: parsed.data.description,
       location: parsed.data.location,
       startsAt,
-      theme: parsed.data.theme,
       images: eventImageStorage.stringify(imagePaths),
       category: parsed.data.category,
       attendanceLimit: parsed.data.attendanceLimit,
       registrationDeadline,
+      ownerName:
+        parsed.data.eventOwner.trim() || req.user?.fullName?.trim() || existingEvent.ownerName,
     },
   });
 
