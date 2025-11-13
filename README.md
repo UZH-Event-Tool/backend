@@ -5,12 +5,11 @@ Lightweight Express + SQLite backend powering authentication for the MVP. The st
 ## Getting Started
 
 ```bash
-# from repo root
+git clone <repo>
 cd backend
 npm install
-npm run prisma:generate
-npm run db:init   # creates the SQLite schema
-npm run dev       # starts http://localhost:4000 by default
+npx prisma db push   # creates prisma/dev.db and runs prisma generate
+npm run dev          # starts http://localhost:4000 by default
 ```
 
 Environment variables live in `.env`. Copy `.env.example` and adjust as needed:
@@ -30,32 +29,24 @@ Key variables:
 
 ### `POST /auth/register`
 
-Creates a new student account. Body schema:
+Creates a new student account. **Send `multipart/form-data`** with:
 
-```json
-{
-  "fullName": "Jane Doe",
-  "email": "jane.doe@uzh.ch",
-  "password": "super-secret",
-  "age": 21,
-  "location": "Zürich",
-  "fieldOfStudies": "Computer Science",
-  "universityEmail": "jane.doe@uzh.ch",
-  "interests": ["Networking", "Hiking"]
-}
-```
+| Field | Type | Notes |
+| --- | --- | --- |
+| `fullName` | text | min 2 chars |
+| `password` | text | ≥ 8 chars |
+| `age`, `location`, `fieldOfStudies` | optional text/number fields |
+| `universityEmail` | text | must match `ALLOWED_EMAIL_DOMAIN` |
+| `interests` | multi-value | send as repeated form fields or comma-separated string |
+| `profileImage` | file | optional PNG/JPEG ≤5 MB |
 
-Rules:
-
-- `email` (and `universityEmail` if provided) must end with `@uzh.ch` (configurable).
-- Passwords require ≥ 8 characters and are stored with bcrypt.
-- `interests` are stored as a comma-separated list for now.
+Passwords are hashed with bcrypt. `interests` are stored as a comma-separated list.
 
 Response:
 
 ```json
 {
-  "user": { "id": "...", "email": "...", "fullName": "...", ... },
+  "user": { "id": "...", "universityEmail": "...", "fullName": "...", ... },
   "token": "<JWT>"
 }
 ```
@@ -65,7 +56,7 @@ Response:
 Body:
 
 ```json
-{ "email": "jane.doe@uzh.ch", "password": "super-secret" }
+{ "universityEmail": "jane.doe@uzh.ch", "password": "super-secret" }
 ```
 
 Returns the same shape as registration. Non-matching credentials return `401`.
@@ -94,7 +85,7 @@ On success the updated user payload is returned. Profile images are stored local
 - `src/app.ts` – Express app factory + middleware wiring.
 - `src/routes/auth.ts` – login & registration handlers.
 - `src/routes/profile.ts` – authenticated profile read/update endpoints (with image uploads).
-- `scripts/init-db.ts` – ensures the SQLite schema exists (used by `npm run db:init`).
+- `scripts/init-db.ts` – ensures the SQLite schema exists (legacy helper; `npx prisma db push` replaces it locally).
 - `prisma/schema.prisma` – Prisma data model (mirrors the SQLite schema).
 
 ## Inspecting the Database
@@ -106,6 +97,8 @@ npx prisma studio
 ```
 
 This opens a local web app with the `User` table so you can confirm inserts and timestamps.
+
+> ℹ️ `prisma/dev.db` is ignored in Git. Each developer should run `npx prisma db push` (or the seed script) after cloning to create their local database before running `npm run dev` or `npx prisma studio`.
 
 ## Next Steps
 
