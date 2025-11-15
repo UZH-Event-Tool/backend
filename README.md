@@ -79,6 +79,27 @@ Multipart endpoint (accepts `multipart/form-data`) that updates a user's profile
 
 On success the updated user payload is returned. Profile images are stored locally in `uploads/profile-images` and served from `/uploads/...`.
 
+### `GET /events`
+
+Returns the authenticated user's event feed. Each event contains:
+
+- `registrationCount` – current attendee count
+- `attendanceLimit` – max capacity
+- `registrationDeadline` and `startsAt`
+- `isRegistered` – whether the current user already registered
+
+Use these fields to disable the "Register" button when the event is full or past the deadline.
+
+### `POST /events/:eventId/register`
+
+Registers the signed-in user for the event. Responses:
+
+- `201` with `{ message, registrationCount }` on success (use `registrationCount` to bump the UI counter and show the confirmation screen).
+- `400` with a descriptive `message` when registration is closed (deadline passed) or the event is full.
+- `409` when the user already registered.
+
+The backend also prevents duplicate registrations and enforces the capacity limit atomically.
+
 ## Project Structure
 
 - `src/env.ts` – Zod-based ENV validation.

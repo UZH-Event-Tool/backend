@@ -14,11 +14,18 @@ function stringifyImages(images: string[]): string {
   return JSON.stringify(images);
 }
 
-export function toPublicEvent(event: Event) {
-  const { images, ...rest } = event;
+export type EventMeta = {
+  registrationCount?: number;
+  isRegistered?: boolean;
+};
+
+export function toPublicEvent(event: Event & Partial<EventMeta>) {
+  const { images, registrationCount, isRegistered, ...rest } = event as Event & EventMeta;
   return {
     ...rest,
     images: parseImages(images),
+    registrationCount: registrationCount ?? 0,
+    isRegistered: Boolean(isRegistered),
   };
 }
 

@@ -25,6 +25,7 @@ model User {
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
   events            Event[]
+  eventRegistrations EventRegistration[]
 }
 
 model Event {
@@ -40,6 +41,20 @@ model Event {
   ownerName   String   @default("")
   ownerId     String
   owner       User     @relation(fields: [ownerId], references: [id])
+  registrations EventRegistration[]
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+model EventRegistration {
+  id        String   @id @default(cuid())
+  eventId   String
+  userId    String
+  createdAt DateTime @default(now())
+  event     Event    @relation(fields: [eventId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@unique([eventId, userId])
+  @@index([eventId])
+  @@index([userId])
 }

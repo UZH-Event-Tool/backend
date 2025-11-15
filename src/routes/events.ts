@@ -154,7 +154,7 @@ async function handleCreateEvent(req: AuthenticatedRequest, res: Response) {
 
   return res.status(201).json({
     message: "Event created successfully",
-    event: toPublicEvent(event),
+    event: toPublicEvent({ ...event, registrationCount: 0, isRegistered: false }),
   });
 }
 
@@ -226,9 +226,20 @@ async function handleUpdateEvent(req: AuthenticatedRequest, res: Response) {
     deleteStoredImageFiles(currentImages);
   }
 
+  const [registrationCount, isRegistered] = await Promise.all([
+    prisma.eventRegistration.count({ where: { eventId } }),
+    prisma.eventRegistration.count({
+      where: { eventId, userId: req.user!.sub },
+    }).then((count) => count > 0),
+  ]);
+
   return res.json({
     message: "Event updated successfully",
-    event: toPublicEvent(updatedEvent),
+    event: toPublicEvent({
+      ...updatedEvent,
+      registrationCount,
+      isRegistered,
+    }),
   });
 }
 
@@ -245,17 +256,129 @@ router.post("/", (req, res, next: NextFunction) => {
   });
 });
 
-router.get("/", async (_req, res) => {
+router.get("/", async (req: AuthenticatedRequest, res) => {
+  const userId = req.user!.sub;
   const events = await prisma.event.findMany({
     orderBy: { startsAt: "asc" },
+    include: {
+      _count: { select: { registrations: true } },
+      registrations: {
+        where: { userId },
+        select: { id: true },
+      },
+    },
   });
 
   return res.json({
-    events: events.map(toPublicEvent),
+    events: events.map(({ _count, registrations, ...event }) =>
+      toPublicEvent({
+        ...event,
+        registrationCount: _count.registrations,
+        isRegistered: registrations.length > 0,
+      }),
+    ),
   });
 });
 
 router.get("/:eventId", async (req: AuthenticatedRequest, res) => {
+  const { eventId } = req.params;
+  if (!eventId) {
+    return res.status(400).json({ message: "Event id is required" });
+  }
+
+  const event = await prisma.event.findUnique({
+    where: { id: eventId },
+    include: {
+      _count: { select: { registrations: true } },
+      registrations: {
+        where: { userId: req.user!.sub },
+        select: { id: true },
+      },
+    },
+  });
+
+  if (!event) {
+    return res.status(404).json({ message: "Event not found" });
+  }
+
+  const { _count, registrations, ...rest } = event;
+  return res.json({
+    event: toPublicEvent({
+      ...rest,
+      registrationCount: _count.registrations,
+      isRegistered: registrations.length > 0,
+    }),
+  });
+});
+
+router.put("/:eventId", (req, res, next: NextFunction) => {
+  upload.array("images", 5)(req, res, (err) => {
+    if (err) {
+      cleanupFiles(req.files as Express.Multer.File[] | undefined);
+      return res.status(400).json({ message: err.message });
+    }
+    handleUpdateEvent(req as AuthenticatedRequest, res).catch((error) => {
+      cleanupFiles(req.files as Express.Multer.File[] | undefined);
+      next(error);
+    });
+  });
+});
+
+router.post("/:eventId/register", async (req: AuthenticatedRequest, res) => {
+  const { eventId } = req.params;
+  if (!eventId) {
+    return res.status(400).json({ message: "Event id is required" });
+  }
+
+  const event = await prisma.event.findUnique({
+    where: { id: eventId },
+    include: {
+      _count: { select: { registrations: true } },
+    },
+  });
+
+  if (!event) {
+    return res.status(404).json({ message: "Event not found" });
+  }
+
+  const now = new Date();
+  if (event.registrationDeadline.getTime() <= now.getTime()) {
+    return res.status(400).json({ message: "Registration deadline has passed" });
+  }
+
+  if (event._count.registrations >= event.attendanceLimit) {
+    return res.status(400).json({ message: "Event is full" });
+  }
+
+  const existingRegistration = await prisma.eventRegistration.findUnique({
+    where: {
+      eventId_userId: {
+        eventId,
+        userId: req.user!.sub,
+      },
+    },
+  });
+
+  if (existingRegistration) {
+    return res.status(409).json({ message: "You are already registered for this event" });
+  }
+
+  await prisma.eventRegistration.create({
+    data: {
+      eventId,
+      userId: req.user!.sub,
+    },
+  });
+
+  const registrationCount = event._count.registrations + 1;
+
+  return res.status(201).json({
+    message: "You are registered for this event",
+    registrationCount,
+  });
+});
+
+router.post("/:eventId/unregister", async (req: AuthenticatedRequest, res) => {
   const { eventId } = req.params;
   if (!eventId) {
     return res.status(400).json({ message: "Event id is required" });
@@ -269,19 +392,37 @@ router.get("/:eventId", async (req: AuthenticatedRequest, res) => {
     return res.status(404).json({ message: "Event not found" });
   }
 
-  return res.json({ event: toPublicEvent(event) });
-});
+  const now = new Date();
+  if (event.registrationDeadline.getTime() <= now.getTime()) {
+    return res
+      .status(400)
+      .json({ message: "De-registration is no longer allowed for this event" });
+  }
 
-router.put("/:eventId", (req, res, next: NextFunction) => {
-  upload.array("images", 5)(req, res, (err) => {
-    if (err) {
-      cleanupFiles(req.files as Express.Multer.File[] | undefined);
-      return res.status(400).json({ message: err.message });
-    }
-    handleUpdateEvent(req as AuthenticatedRequest, res).catch((error) => {
-      cleanupFiles(req.files as Express.Multer.File[] | undefined);
-      next(error);
-    });
+  const registration = await prisma.eventRegistration.findUnique({
+    where: {
+      eventId_userId: {
+        eventId,
+        userId: req.user!.sub,
+      },
+    },
+  });
+
+  if (!registration) {
+    return res.status(404).json({ message: "You are not registered for this event" });
+  }
+
+  await prisma.eventRegistration.delete({
+    where: { id: registration.id },
+  });
+
+  const registrationCount = await prisma.eventRegistration.count({
+    where: { eventId },
+  });
+
+  return res.json({
+    message: "You have been unregistered from this event",
+    registrationCount,
   });
 });
 
@@ -302,7 +443,10 @@ router.delete("/:eventId", async (req: AuthenticatedRequest, res) => {
       .json({ message: "You are not allowed to delete this event" });
   }
 
-  await prisma.event.delete({ where: { id: eventId } });
+  await prisma.$transaction([
+    prisma.eventRegistration.deleteMany({ where: { eventId } }),
+    prisma.event.delete({ where: { id: eventId } }),
+  ]);
   deleteStoredImageFiles(eventImageStorage.parse(event.images));
   return res.status(204).send();
 });
