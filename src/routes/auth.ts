@@ -15,7 +15,7 @@ const router = Router();
 
 const registerSchema = z.object({
   fullName: z.string().min(2).max(120),
-  password: z.string().min(8, "Password must be at least 8 characters"),
+  password: z.string().min(6, "Password must be at least 6 characters"),
   age: z.coerce.number().int().positive().max(120).optional(),
   location: z.string().max(120).optional(),
   fieldOfStudies: z.string().max(120).optional(),

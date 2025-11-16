@@ -34,7 +34,7 @@ Creates a new student account. **Send `multipart/form-data`** with:
 | Field | Type | Notes |
 | --- | --- | --- |
 | `fullName` | text | min 2 chars |
-| `password` | text | ≥ 8 chars |
+| `password` | text | ≥ 6 chars |
 | `age`, `location`, `fieldOfStudies` | optional text/number fields |
 | `universityEmail` | text | must match `ALLOWED_EMAIL_DOMAIN` |
 | `interests` | multi-value | send as repeated form fields or comma-separated string |
